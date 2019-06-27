@@ -13,8 +13,6 @@ LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars
 #define DHTPIN 2
 #define DHTTYPE DHT11 
 
-
-
 DHT dht(DHTPIN, DHTTYPE);
 RTC_DS1307 rtc;
 
