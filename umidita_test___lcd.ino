@@ -1,35 +1,41 @@
-/********************************/
+/*********************************************************/
 // include the library code
-#include <Wire.h> 
-#include "DHT.h"
-#include <LiquidCrystal_I2C.h>
+#include <Wire.h>    // library I2C
+#include "DHT.h"    //libreria DHT11
+#include "RTClib.h" //library modulo RTC
+#include <LiquidCrystal_I2C.h>  //library display 
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-
-#include "RTClib.h"
 #if defined(ARDUINO_ARCH_SAMD)  // for Zero, output on USB Serial console
    #define Serial SerialUSB
 #endif
 
-#define DHTPIN 2
+#define DHTPIN 2                 //define pin DHT
 #define DHTTYPE DHT11 
 
-DHT dht(DHTPIN, DHTTYPE);
-RTC_DS1307 rtc;
+DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
+RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 
 /*********************************************************/
-
-long tempo;
+int buttonDisplay = 53;
+int lightSensor = A15;
+int lightSensorThreshold = 500;
+int brightness = 0;
+long timerDisplay = 0;
 int buzzer = 23;
 int powerLed = 22;
- 
-#define pinSensor 0;
-
-long sensorValue;
+int timeOutDisplay = 60;
+bool turnOff = true;
+bool buttonState = true;
+int pinSensor = A0;
+//long sensorValue;
 
 void setup() {
-   Serial.println(F("DHTxx test!"));
-    dht.begin();
+  Serial.println(F("DHTxx test!"));
+  dht.begin();
+  pinMode(lightSensor,INPUT);
+  pinMode(pinSensor,INPUT);
   pinMode(powerLed,OUTPUT);
+  pinMode(buttonDisplay,INPUT);
   digitalWrite(powerLed,HIGH);
   pinMode(buzzer,OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -37,9 +43,8 @@ void setup() {
   lcd.backlight();  //open the backlight 
 
 
- while (!Serial);  // for Leonardo/Micro/Zero
 
-  Serial.begin(57600);
+ // Serial.begin(57600);
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     while (1);
@@ -54,47 +59,140 @@ void setup() {
     // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
   }
 
- tempo = rtc.now().unixtime();
-
-
-
-  
+ timerDisplay = rtc.now().unixtime();
   Serial.begin(9600);
-
+}
+/**
+ * 
+ */
+void btnSound(int button){
+  if(digitalRead(button) == HIGH && buttonState){
+     buttonState = false;
+     tone(buzzer,1000,100);
+     buttonState = true;
+  }
+}
+ /**
+  * 
+  */
+void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bool isNight,DateTime val) {
+  printTemp(temp);
+  printHumidity(humidity);
+  printSoilMosture(soilMoisture);
+  printAtmPress(atmPress); 
+  printDay(isNight);
+  //Serial.println(val.unixtime() - timerDisplay);
+  if((val.unixtime() - timerDisplay > timeOutDisplay) && (turnOff) ){
+     lcd.noDisplay();
+     lcd.noBacklight();
+     turnOff = false;
+  }
+  if(!turnOff && digitalRead(buttonDisplay) == HIGH ){
+     tone(buzzer,1000,200);
+     lcd.display();
+     lcd.backlight();
+     turnOff = true;
+     timerDisplay = val.unixtime();
+  }
+}
+/**
+ * 
+ */
+void printTemp(float temp){
+  lcd.setCursor (0, 0);
+  lcd.print("Temp: ");
+  lcd.print(temp);
+  lcd.print(" C");
+}
+/**
+ * 
+ */
+void printHumidity(float hum) {
+   lcd.setCursor (0, 1);
+   lcd.print("Umd Att: ");
+   lcd.print(hum);
+   lcd.print(" %");
+}
+/**
+ * 
+ */
+void printSoilMosture(int soilMoisture) {
+   lcd.setCursor (0, 2);
+   lcd.print("Umd Terr: ");
+   lcd.print(soilMoisture);
+   if(soilMoisture >= 10 && soilMoisture <= 99) {
+       lcd.setCursor (12, 2);
+       lcd.print(" ");
+       lcd.setCursor(13, 2);
+       lcd.print("%");
+   }
+   else if( soilMoisture <= 9) {
+       lcd.setCursor(13, 2);
+       lcd.print(" ");
+       lcd.setCursor (11, 2);
+       lcd.print(" %");
+   }
+  
+  
+}
+/**
+ * 
+ */
+void printAtmPress(long &atmPress) {
+   lcd.setCursor (0, 3);
+    lcd.print("Press Atm: ");
+    lcd.print(atmPress);
+    lcd.print(" hpa");
+}
+/**
+ * 
+ */
+void printDay(bool isNight) {
+    lcd.setCursor (15, 2);
+ if(isNight){
+    lcd.print("NIGHT");
+ }
+ else if(!isNight) {
+   lcd.print("DAY  ");
+ } 
+}
+/**
+ * 
+ */
+bool isNight(){
+  brightness = analogRead(lightSensor);
+  if(brightness < lightSensorThreshold){
+     return true;
+  }
+  else{
+    return false;
+  }
+ Serial.println(brightness);
+}
+/**
+ * 
+ */
+int soilMostureControl(){
+  int sensorValue = analogRead(pinSensor);
+  sensorValue = map(sensorValue,0,1023,0,99);
+  int soilMoisture = (99 - sensorValue);
+  Serial.println(soilMoisture);
+  return soilMoisture;
 }
 
+
+
 void loop() {
+   DateTime now = rtc.now();
  // sensorValue = analogRead(pinSensor);
   //sensorValue = map(sensorValue,0,1023,0,99);
- // lcd.clear();
-  lcd.setCursor ( 0, 0 );            // go to the top left corner
-  //lcd.print(" umidita terreno "); // write this string on the top ro
-  //lcd.print(sensorValue);
-   DateTime now = rtc.now();
-    digitalWrite(LED_BUILTIN, HIGH);
-    lcd.print("secondi ");
-    
-     lcd.print(now.unixtime() - tempo);
-    if(now.unixtime() - tempo > 20) {
-     // tone(buzzer,1000,1000);
-      digitalWrite(LED_BUILTIN, LOW);
-      tempo = now.unixtime();
-      //delay(5000);
-    }
-      float h = dht.readHumidity();
-      float t = dht.readTemperature();
-     lcd.setCursor ( 0, 1 );   
-     lcd.print("Temp = " );
-     lcd.print(t);
-     lcd.print( " C");
-     lcd.setCursor ( 0, 2 );
-     lcd.print("umidita = " );
-     lcd.print(h);
-     lcd.print( " %");
-     
-  //Serial.print("Valore: ");
-//  Serial.println(sensorValue);
-  
-  delay(1000);      
+ ;
+  btnSound(buttonDisplay);
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  displayLayout(t,h, soilMostureControl(),1023,isNight(),now);
+   
+
+
 
 }
