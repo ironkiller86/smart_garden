@@ -19,19 +19,23 @@ RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 int buttonDisplay = 53;
 int lightSensor = A15;
 int lightSensorThreshold = 500;
-int brightness = 0;
+int moistureSensorThreshold = 70;
 long timerDisplay = 0;
+long irrigationTime = 10;
+long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
 int timeOutDisplay = 60;
 bool turnOff = true;
 bool buttonState = true;
 int pinSensor = A0;
-//long sensorValue;
+int elettrovalvola = 52;
+
 
 void setup() {
   Serial.println(F("DHTxx test!"));
   dht.begin();
+  pinMode(elettrovalvola,OUTPUT);
   pinMode(lightSensor,INPUT);
   pinMode(pinSensor,INPUT);
   pinMode(powerLed,OUTPUT);
@@ -60,6 +64,7 @@ void setup() {
   }
 
  timerDisplay = rtc.now().unixtime();
+ timeOutIrrigation = rtc.now().unixtime();
   Serial.begin(9600);
 }
 /**
@@ -68,7 +73,7 @@ void setup() {
 void btnSound(int button){
   if(digitalRead(button) == HIGH && buttonState){
      buttonState = false;
-     tone(buzzer,1000,100);
+     tone(buzzer,1000,200);
      buttonState = true;
   }
 }
@@ -132,8 +137,6 @@ void printSoilMosture(int soilMoisture) {
        lcd.setCursor (11, 2);
        lcd.print(" %");
    }
-  
-  
 }
 /**
  * 
@@ -160,38 +163,74 @@ void printDay(bool isNight) {
  * 
  */
 bool isNight(){
-  brightness = analogRead(lightSensor);
+  int brightness = analogRead(lightSensor);
   if(brightness < lightSensorThreshold){
      return true;
   }
   else{
     return false;
   }
- Serial.println(brightness);
+// Serial.println(brightness);
 }
 /**
  * 
  */
-int soilMostureControl(){
+int soilMoistureControl(){
   int sensorValue = analogRead(pinSensor);
   sensorValue = map(sensorValue,0,1023,0,99);
   int soilMoisture = (99 - sensorValue);
-  Serial.println(soilMoisture);
+  //Serial.println(soilMoisture);
   return soilMoisture;
 }
+/**
+ * 
+ */
+struct DataSensor {
+  int soilMoisture;
+  bool timeOfDay;
+  float humidity;
+  float temperature;
+  int atmPressure;
+}dataValue;
+/**
+ * 
+ */
+void valueReader() {
+  dataValue = {soilMoistureControl(),
+               isNight(),dht.readHumidity(), 
+               dht.readTemperature(),
+               1023
+               };
+}
+/*
+ * 
+ * 
+ */
+ void irrigationCycle(DateTime now ) {
+  if(dataValue.soilMoisture < moistureSensorThreshold && dataValue.timeOfDay == true ) {
+     digitalWrite(elettrovalvola,HIGH);
+  }
+    //  Serial.println(now.unixtime() - timeOutIrrigation);
+  /*if(now.unixtime() -  timeOutIrrigation > irrigationTime)*/else {
+     digitalWrite(elettrovalvola,LOW);
+     //timeOutIrrigation = now.unixtime();
+     
+   } 
+  //}
+ 
+ 
+ }
 
 
 
+ 
 void loop() {
-   DateTime now = rtc.now();
- // sensorValue = analogRead(pinSensor);
-  //sensorValue = map(sensorValue,0,1023,0,99);
- ;
+  DateTime now = rtc.now();
   btnSound(buttonDisplay);
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  displayLayout(t,h, soilMostureControl(),1023,isNight(),now);
-   
+  valueReader();
+  displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,1023,dataValue.timeOfDay,now);
+  irrigationCycle(now);
+  
 
 
 
