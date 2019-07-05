@@ -21,7 +21,7 @@ int lightSensor = A15;
 int lightSensorThreshold = 500;
 int moistureSensorThreshold = 70;
 long timerDisplay = 0;
-long irrigationTime = 10;
+long irrigationTime =1800; //3600;
 long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
@@ -30,7 +30,7 @@ bool turnOff = true;
 bool buttonState = true;
 int pinSensor = A0;
 int elettrovalvola = 52;
-
+bool irrigationState = false;
 
 void setup() {
   Serial.println(F("DHTxx test!"));
@@ -84,7 +84,7 @@ void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bo
   printTemp(temp);
   printHumidity(humidity);
   printSoilMosture(soilMoisture);
-  printAtmPress(atmPress); 
+  printAtmPress(atmPress,val); 
   printDay(isNight);
   //Serial.println(val.unixtime() - timerDisplay);
   if((val.unixtime() - timerDisplay > timeOutDisplay) && (turnOff) ){
@@ -141,11 +141,18 @@ void printSoilMosture(int soilMoisture) {
 /**
  * 
  */
-void printAtmPress(long &atmPress) {
+void printAtmPress(long &atmPress,DateTime val) {
    lcd.setCursor (0, 3);
-    lcd.print("Press Atm: ");
-    lcd.print(atmPress);
-    lcd.print(" hpa");
+   if(!irrigationState){
+     lcd.print("Press Atm: ");
+     lcd.print(atmPress);
+     lcd.print(" hpa");
+   }
+   else if(irrigationState){
+     lcd.print("IRRIGO PER ");
+     lcd.print((irrigationTime - (val.unixtime() -  timeOutIrrigation))/60);
+     lcd.print(" MIN  ");
+   }
 }
 /**
  * 
@@ -206,19 +213,50 @@ void valueReader() {
  * 
  * 
  */
- void irrigationCycle(DateTime now ) {
-  if(dataValue.soilMoisture < moistureSensorThreshold && dataValue.timeOfDay == true ) {
-     digitalWrite(elettrovalvola,HIGH);
-  }
-    //  Serial.println(now.unixtime() - timeOutIrrigation);
-  /*if(now.unixtime() -  timeOutIrrigation > irrigationTime)*/else {
-     digitalWrite(elettrovalvola,LOW);
-     //timeOutIrrigation = now.unixtime();
+ void alarm() {
+     int buzzerTime = 1000;
+     int delayTime = 1000;
+     tone(buzzer,1500,buzzerTime);
+     delay(delayTime);
+     noTone(buzzer);
+     delay(delayTime);
+     tone(buzzer,1500,buzzerTime);
+     delay(delayTime);
+     noTone(buzzer);
+     delay(delayTime);
+     tone(buzzer,1500,buzzerTime);
+     delay(delayTime);
+     noTone(buzzer);
+ }
+ /**
+  * 
+  */
+  void message(String one, String two, String three) {
+      lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(one);
+        lcd.setCursor(0,1);
+        lcd.print(two);
+        lcd.setCursor(0,2);
+        lcd.print(three);
      
-   } 
-  //}
- 
- 
+  }
+ void irrigationCycle(DateTime now) {
+   if(!irrigationState) {
+      if((dataValue.soilMoisture < moistureSensorThreshold) && (dataValue.timeOfDay == true )) {
+        message("      SISTEMA   ","    IRRIGAZIONE ","      ATTIVO!  ");
+        alarm();
+        lcd.clear();
+        digitalWrite(elettrovalvola,HIGH);
+        irrigationState = true;
+      }
+    }
+   Serial.println(now.unixtime() - timeOutIrrigation);
+    if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
+       digitalWrite(elettrovalvola,LOW);
+        timeOutIrrigation = now.unixtime(); 
+        irrigationState = false;
+     } 
  }
 
 
