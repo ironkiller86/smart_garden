@@ -15,7 +15,7 @@ LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars
 DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
 RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 
-/*********************************************************/
+/**********************************************************/
 int buttonDisplay = 53;
 int lightSensor = A15;
 int lightSensorThreshold = 500;
