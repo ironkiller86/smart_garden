@@ -16,21 +16,23 @@ DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
 RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 
 /**********************************************************/
+int buttonManIrrig = 51;
 int buttonDisplay = 53;
 int lightSensor = A15;
 int lightSensorThreshold = 500;
 int moistureSensorThreshold = 70;
 long timerDisplay = 0;
-long irrigationTime = 60; //3600;
+long irrigationTime = 30; //3600;
 long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
-int timeOutDisplay = 80;
+int timeOutDisplay = 20;
 bool turnOff = true;
-bool buttonState = true;
 int pinSensor = A0;
 int elettrovalvola = 52;
 bool irrigationState = false;
+bool manualIrrigationState = false;
+
 
 void setup() {
   Serial.println(F("DHTxx test!"));
@@ -70,10 +72,11 @@ void setup() {
 /**
  * 
  */
-void btnSound(int button){
+void btnSound(int button,int note){
+  bool buttonState = true;
   if(digitalRead(button) == HIGH && buttonState){
      buttonState = false;
-     tone(buzzer,1000,200);
+     tone(buzzer,note,200);
      buttonState = true;
   }
 }
@@ -143,12 +146,12 @@ void printSoilMosture(int soilMoisture) {
  */
 void printAtmPress(long &atmPress,DateTime val) {
    lcd.setCursor (0, 3);
-   if(!irrigationState){
+   if((!irrigationState) && (!manualIrrigationState)){
      lcd.print("Press Atm: ");
      lcd.print(atmPress);
      lcd.print(" hpa");
    }
-   else if(irrigationState){
+  else  if((irrigationState) || (manualIrrigationState)){
      lcd.print("IRRIGO PER ");
      lcd.print((irrigationTime - (val.unixtime() -  timeOutIrrigation))/60);
      lcd.print(" MIN  ");
@@ -231,24 +234,36 @@ void valueReader() {
  /**
   * 
   */
-  void message(String one, String two, String three) {
+  void activeDisplay() {
       lcd.clear();
-        lcd.setCursor(0,0);
-        lcd.print(one);
-        lcd.setCursor(0,1);
-        lcd.print(two);
-        lcd.setCursor(0,2);
-        lcd.print(three);
-     
+      lcd.display();
+      lcd.backlight();
+  }
+void deactivatesDisplay() {
+      lcd.noDisplay();
+      lcd.noBacklight();
+      lcd.clear();
+  }
+
+
+  
+  void message(String one, String two, String three) {
+      lcd.setCursor(0,0);
+      lcd.print(one);
+      lcd.setCursor(0,1);
+      lcd.print(two);
+      lcd.setCursor(0,2);
+      lcd.print(three);
   }
   /**
    * 
    */
    void startIrrigationProcess(DateTime now) {
+        activeDisplay();
         message("      SISTEMA   ","    IRRIGAZIONE ","      ATTIVO!  ");
         alarm();
-        lcd.clear();
         digitalWrite(elettrovalvola,HIGH);
+        deactivatesDisplay();
         timeOutIrrigation = now.unixtime(); 
    }
    /**
@@ -257,16 +272,17 @@ void valueReader() {
    void stopIrrigationProcess(DateTime now) {
       digitalWrite(elettrovalvola,LOW);
       timeOutIrrigation = now.unixtime(); 
+      activeDisplay();
       message("      SISTEMA   ","    IRRIGAZIONE ","    DISATTIVATO!  ");
       alarm();
-      lcd.clear();
+      deactivatesDisplay();
    }
    /**
     * 
     */
- void irrigationCycle(DateTime now ) {
+ void irrigationCycle(DateTime now) {
    if(!irrigationState) {
-      if((dataValue.soilMoisture < moistureSensorThreshold) && (dataValue.timeOfDay == true )) {
+      if((dataValue.soilMoisture < moistureSensorThreshold) && (dataValue.timeOfDay == true ) && (!manualIrrigationState)) {
         startIrrigationProcess(now);
         irrigationState = true;
         
@@ -274,25 +290,40 @@ void valueReader() {
     }
     Serial.println(now.unixtime() - timeOutIrrigation);
    if((irrigationState)){
-    
-    
      if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
         stopIrrigationProcess(now);
         irrigationState = false;
      } 
    } 
  }
-
+ /**
+  * 
+  */
+   void manualIrrigation(DateTime now) {
+     if(!irrigationState) {
+        if(digitalRead(buttonManIrrig) == HIGH){
+          manualIrrigationState = true;
+          startIrrigationProcess(now);
+        }
+        if(manualIrrigationState) {
+          if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
+            stopIrrigationProcess(now);
+            manualIrrigationState = false;
+          } 
+       }  
+     }
+   }
 
 
  
 void loop() {
   DateTime now = rtc.now();
-  btnSound(buttonDisplay);
+  btnSound(buttonDisplay,1000);
+  btnSound(buttonManIrrig,2000);
   valueReader();
   displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,1023,dataValue.timeOfDay,now);
   irrigationCycle(now);
-  
+  manualIrrigation(now);
 
 
 
