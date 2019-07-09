@@ -18,11 +18,11 @@ RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 /**********************************************************/
 int buttonManIrrig = 51;
 int buttonDisplay = 53;
-int lightSensor = A15;
+int lightSensor = A14;
 int lightSensorThreshold = 500;
 int moistureSensorThreshold = 70;
 long timerDisplay = 0;
-long irrigationTime = 30; //3600;
+long irrigationTime = 120; //3600;
 long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
@@ -89,7 +89,7 @@ void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bo
   printSoilMosture(soilMoisture);
   printAtmPress(atmPress,val); 
   printDay(isNight);
-  //Serial.println(val.unixtime() - timerDisplay);
+  Serial.println(val.unixtime() - timerDisplay);
   if((val.unixtime() - timerDisplay > timeOutDisplay) && (turnOff) ){
      lcd.noDisplay();
      lcd.noBacklight();
@@ -153,7 +153,7 @@ void printAtmPress(long &atmPress,DateTime val) {
    }
   else  if((irrigationState) || (manualIrrigationState)){
      lcd.print("IRRIGO PER ");
-     lcd.print((irrigationTime - (val.unixtime() -  timeOutIrrigation))/60);
+     lcd.print(1 + ((irrigationTime - (val.unixtime() -  timeOutIrrigation))/60));
      lcd.print(" MIN  ");
    }
 }
@@ -180,15 +180,16 @@ bool isNight(){
   else{
     return false;
   }
-// Serial.println(brightness);
+ Serial.println(brightness);
 }
 /**
  * 
  */
 int soilMoistureControl(){
   int sensorValue = analogRead(pinSensor);
+  //Serial.println(sensorValue);
   sensorValue = map(sensorValue,0,1023,0,99);
-  int soilMoisture = (99 - sensorValue);
+  int soilMoisture = (99 - sensorValue + 30);
   //Serial.println(soilMoisture);
   return soilMoisture;
 }
@@ -288,7 +289,7 @@ void deactivatesDisplay() {
         
       }
     }
-    Serial.println(now.unixtime() - timeOutIrrigation);
+   // Serial.println(now.unixtime() - timeOutIrrigation);
    if((irrigationState)){
      if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
         stopIrrigationProcess(now);
@@ -304,11 +305,13 @@ void deactivatesDisplay() {
         if(digitalRead(buttonManIrrig) == HIGH){
           manualIrrigationState = true;
           startIrrigationProcess(now);
+          turnOff = false;
         }
         if(manualIrrigationState) {
           if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
             stopIrrigationProcess(now);
             manualIrrigationState = false;
+            turnOff = false;
           } 
        }  
      }
