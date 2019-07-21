@@ -16,24 +16,25 @@ DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
 RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 
 /**********************************************************/
-int buttonManIrrig = 35;
-int buttonDisplay = 37;
+int buttonManIrrig = 35;      // Bottone irrigazione manuale
+int buttonDisplay = 37;       // Bottone accensione display
 int lightSensor = A14;
-int lightSensorThreshold = 500;
-int moistureSensorThreshold = 45;
+int lightSensorThreshold = 500;      // Soglia sensore di luminosità
+int moistureSensorThreshold = 45;    //  soglia sensore umidità terreno
 long timerDisplay = 0;
-long irrigationTime = 1800; //120; //3600;
+long irrigationTime = 1800; /*60;*/ //3600;   // CountDown Irrigazione in secondi
 long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
-int timeOutDisplay = 20;
-bool turnOff = true;
+int timeOutDisplay = 20;           // CountDown attivazione dispaly in secondi
+bool turnOff = true;               // variabile che indica se il display  è acceso o spento
 int pinSensor = A0;
-int elettrovalvola = 52;
-bool irrigationState = false;
-bool manualIrrigationState = false;
-
-
+int elettrovalvola = 52;            
+bool irrigationState = false;       // Indica se il sistema sta irrigando o meno per attivazione da condizioni prestabilite
+bool manualIrrigationState = false;  // Indica se il sistema sta irrigando o meno per attivazione da comando manuale
+/**
+ * 
+ */
 void setup() {
   Serial.println(F("DHTxx test!"));
   dht.begin();
@@ -44,12 +45,11 @@ void setup() {
   pinMode(buttonDisplay,INPUT);
   digitalWrite(powerLed,HIGH);
   pinMode(buzzer,OUTPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
   lcd.init();  //initialize the lcd
   lcd.backlight();  //open the backlight 
-
-
-
+  /**
+   * 
+   */
  // Serial.begin(57600);
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
@@ -64,7 +64,6 @@ void setup() {
     // January 21, 2014 at 3am you would call:
     // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
   }
-
  timerDisplay = rtc.now().unixtime();
  timeOutIrrigation = rtc.now().unixtime();
   Serial.begin(9600);
@@ -81,7 +80,8 @@ void btnSound(int button,int note){
   }
 }
  /**
-  * Funzione che visualizza i dati nel display
+  * Funzione che visualizza i dati nel display e ne 
+  * gestisce l'attivazione/disattivazione in base al tempo
   */
 void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bool isNight,DateTime val) {
   printTemp(temp);
@@ -91,15 +91,11 @@ void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bo
   printDay(isNight);
   //Serial.println(val.unixtime() - timerDisplay);
   if((val.unixtime() - timerDisplay > timeOutDisplay) && (turnOff) ){
-     lcd.noDisplay();
-     lcd.noBacklight();
-     turnOff = false;
+    deactivatesDisplay();
   }
   if(!turnOff && digitalRead(buttonDisplay) == HIGH ){
      tone(buzzer,1000,200);
-     lcd.display();
-     lcd.backlight();
-     turnOff = true;
+     activeDisplay();
      timerDisplay = val.unixtime();
   }
 }
@@ -243,6 +239,7 @@ void valueReader() {
       lcd.clear();
       lcd.display();
       lcd.backlight();
+      turnOff = true;
   }
   /**
    * funzione che spegne il display
@@ -251,6 +248,7 @@ void valueReader() {
       lcd.noDisplay();
       lcd.noBacklight();
       lcd.clear();
+      turnOff = false;
   }
   /**
    * funzione ch assembla un msg da visualizzare
@@ -307,18 +305,22 @@ void valueReader() {
    } 
  }
  /**
-  * funzione che attiva l'irrigazione da comando manuale bypassando le condizioni
+  * funzione che attiva/disattiva l'irrigazione da comando manuale bypassando le condizioni
   * di attivazione standard
   */
    void manualIrrigation(DateTime now) {
      if(!irrigationState) {
-        if(digitalRead(buttonManIrrig) == HIGH){
+        if(digitalRead(buttonManIrrig) == HIGH && (!manualIrrigationState)){
           manualIrrigationState = true;
           startIrrigationProcess(now);
           turnOff = false;
         }
+        /**
+         * se quando premo il pulsante l'irrigazione manuale è già attiva
+         * disattivo l'irrigazione immediatamemnte.
+         */
         if(manualIrrigationState) {
-          if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
+          if(now.unixtime() -  timeOutIrrigation > irrigationTime || digitalRead(buttonManIrrig) == HIGH ) {
             stopIrrigationProcess(now);
             manualIrrigationState = false;
             turnOff = false;
