@@ -16,13 +16,13 @@ DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
 RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 
 /**********************************************************/
-int buttonManIrrig = 51;
-int buttonDisplay = 53;
+int buttonManIrrig = 35;
+int buttonDisplay = 37;
 int lightSensor = A14;
 int lightSensorThreshold = 500;
-int moistureSensorThreshold = 70;
+int moistureSensorThreshold = 45;
 long timerDisplay = 0;
-long irrigationTime = 120; //3600;
+long irrigationTime = 1800; //120; //3600;
 long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
@@ -70,7 +70,7 @@ void setup() {
   Serial.begin(9600);
 }
 /**
- * 
+ * rileva se il pulsangte è premuto
  */
 void btnSound(int button,int note){
   bool buttonState = true;
@@ -81,7 +81,7 @@ void btnSound(int button,int note){
   }
 }
  /**
-  * 
+  * Funzione che visualizza i dati nel display
   */
 void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bool isNight,DateTime val) {
   printTemp(temp);
@@ -89,7 +89,7 @@ void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bo
   printSoilMosture(soilMoisture);
   printAtmPress(atmPress,val); 
   printDay(isNight);
-  Serial.println(val.unixtime() - timerDisplay);
+  //Serial.println(val.unixtime() - timerDisplay);
   if((val.unixtime() - timerDisplay > timeOutDisplay) && (turnOff) ){
      lcd.noDisplay();
      lcd.noBacklight();
@@ -104,7 +104,7 @@ void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bo
   }
 }
 /**
- * 
+ * stampa layout temperatura
  */
 void printTemp(float temp){
   lcd.setCursor (0, 0);
@@ -113,7 +113,7 @@ void printTemp(float temp){
   lcd.print(" C");
 }
 /**
- * 
+ * stampa layout umidità atmosferca
  */
 void printHumidity(float hum) {
    lcd.setCursor (0, 1);
@@ -122,7 +122,7 @@ void printHumidity(float hum) {
    lcd.print(" %");
 }
 /**
- * 
+ * stampa layout umidita terreno
  */
 void printSoilMosture(int soilMoisture) {
    lcd.setCursor (0, 2);
@@ -142,7 +142,8 @@ void printSoilMosture(int soilMoisture) {
    }
 }
 /**
- * 
+ * stampa layout pressione atm e tempo di irrigazione se quest'utlima
+ * è in corso
  */
 void printAtmPress(long &atmPress,DateTime val) {
    lcd.setCursor (0, 3);
@@ -158,7 +159,7 @@ void printAtmPress(long &atmPress,DateTime val) {
    }
 }
 /**
- * 
+ * stampa layout se è giorno o notte
  */
 void printDay(bool isNight) {
     lcd.setCursor (15, 2);
@@ -170,30 +171,32 @@ void printDay(bool isNight) {
  } 
 }
 /**
- * 
+ * Funzione lettura luminosita dal sensore
  */
 bool isNight(){
   int brightness = analogRead(lightSensor);
+  // Serial.println(brightness);
   if(brightness < lightSensorThreshold){
      return true;
   }
   else{
     return false;
   }
- Serial.println(brightness);
+
 }
 /**
- * 
+ *  Funzione lettura umidita terreno dal sensore
  */
 int soilMoistureControl(){
   int sensorValue = analogRead(pinSensor);
   //Serial.println(sensorValue);
-  sensorValue = map(sensorValue,0,1023,0,99);
-  int soilMoisture = (99 - sensorValue + 30);
-  //Serial.println(soilMoisture);
+  int soilMoisture = 1023 - sensorValue;
+  soilMoisture = map(soilMoisture,0,1023,0,99);
+ // Serial.println(soilMoisture);
   return soilMoisture;
 }
 /**
+ * Struct che conterrà tutti i dati letti dai sensori
  * 
  */
 struct DataSensor {
@@ -204,7 +207,8 @@ struct DataSensor {
   int atmPressure;
 }dataValue;
 /**
- * 
+ * Funzione che legge tutti i dati dalle rispettive
+ * funzioni di lettura e li salva nella struct
  */
 void valueReader() {
   dataValue = {soilMoistureControl(),
@@ -215,7 +219,7 @@ void valueReader() {
 }
 /*
  * 
- * 
+ * funzione che produce suono di inizio/fine irrigazione
  */
  void alarm() {
      int buzzerTime = 1000;
@@ -233,21 +237,24 @@ void valueReader() {
      noTone(buzzer);
  }
  /**
-  * 
+  *  funzione che accende il display
   */
   void activeDisplay() {
       lcd.clear();
       lcd.display();
       lcd.backlight();
   }
-void deactivatesDisplay() {
+  /**
+   * funzione che spegne il display
+   */
+  void deactivatesDisplay() {
       lcd.noDisplay();
       lcd.noBacklight();
       lcd.clear();
   }
-
-
-  
+  /**
+   * funzione ch assembla un msg da visualizzare
+   */
   void message(String one, String two, String three) {
       lcd.setCursor(0,0);
       lcd.print(one);
@@ -257,7 +264,7 @@ void deactivatesDisplay() {
       lcd.print(three);
   }
   /**
-   * 
+   * funzione di attivazione irrigazione
    */
    void startIrrigationProcess(DateTime now) {
         activeDisplay();
@@ -268,7 +275,7 @@ void deactivatesDisplay() {
         timeOutIrrigation = now.unixtime(); 
    }
    /**
-    * 
+    * funzione di disattivazione irrigazione
     */
    void stopIrrigationProcess(DateTime now) {
       digitalWrite(elettrovalvola,LOW);
@@ -279,11 +286,13 @@ void deactivatesDisplay() {
       deactivatesDisplay();
    }
    /**
-    * 
+    * funzione che si occupa di controllare se ci sono le condizioni per effettuare
+    * l'irrigazione,se cosi è, essa avvia l'irrigazione è irriga fino allo scadere 
+    * del tempo prestabilito
     */
  void irrigationCycle(DateTime now) {
    if(!irrigationState) {
-      if((dataValue.soilMoisture < moistureSensorThreshold) && (dataValue.timeOfDay == true ) && (!manualIrrigationState)) {
+      if((dataValue.soilMoisture <  moistureSensorThreshold) && (dataValue.timeOfDay == true ) && (!manualIrrigationState)) {
         startIrrigationProcess(now);
         irrigationState = true;
         
@@ -298,7 +307,8 @@ void deactivatesDisplay() {
    } 
  }
  /**
-  * 
+  * funzione che attiva l'irrigazione da comando manuale bypassando le condizioni
+  * di attivazione standard
   */
    void manualIrrigation(DateTime now) {
      if(!irrigationState) {
@@ -316,9 +326,9 @@ void deactivatesDisplay() {
        }  
      }
    }
-
-
- 
+  /**
+   * 
+   */
 void loop() {
   DateTime now = rtc.now();
   btnSound(buttonDisplay,1000);
@@ -327,7 +337,4 @@ void loop() {
   displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,1023,dataValue.timeOfDay,now);
   irrigationCycle(now);
   manualIrrigation(now);
-
-
-
 }
