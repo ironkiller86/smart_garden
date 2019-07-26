@@ -185,9 +185,10 @@ bool isNight(){
  */
 int soilMoistureControl(){
   int sensorValue = analogRead(pinSensor);
-  //Serial.println(sensorValue);
+  Serial.println(sensorValue);
   int soilMoisture = 1023 - sensorValue;
-  soilMoisture = map(soilMoisture,0,1023,0,99);
+   Serial.println(soilMoisture);
+  soilMoisture = map(soilMoisture,1023,0,99,0);
  // Serial.println(soilMoisture);
   return soilMoisture;
 }
@@ -337,6 +338,6 @@ void loop() {
   btnSound(buttonManIrrig,2000);
   valueReader();
   displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,1023,dataValue.timeOfDay,now);
-  irrigationCycle(now);
+  //irrigationCycle(now);
   manualIrrigation(now);
 }
