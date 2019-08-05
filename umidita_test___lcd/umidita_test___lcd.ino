@@ -1,8 +1,10 @@
+
 /*********************************************************/
 // include the library code
 #include <Wire.h>    // library I2C
 #include "DHT.h"    //libreria DHT11
 #include "RTClib.h" //library modulo RTC
+#include <SoftwareSerial.h>     // libreria comunicazione seriale bluetooth
 #include <LiquidCrystal_I2C.h>  //library display 
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 #if defined(ARDUINO_ARCH_SAMD)  // for Zero, output on USB Serial console
@@ -12,6 +14,11 @@ LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars
 #define DHTPIN 2                 //define pin DHT
 #define DHTTYPE DHT11 
 
+#define RX 11                  // pin rx bluetooth
+#define TX 10                  // pin Tx bluetooth
+SoftwareSerial bluetooth(TX, RX);  //  creazione Object di tipo SoftwareSerial
+
+
 DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
 RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
 
@@ -20,7 +27,7 @@ int buttonManIrrig = 35;      // Bottone irrigazione manuale
 int buttonDisplay = 37;       // Bottone accensione display
 int lightSensor = A14;
 int lightSensorThreshold = 500;      // Soglia sensore di luminosità
-int moistureSensorThreshold = 45;    //  soglia sensore umidità terreno
+int moistureSensorThreshold = 75;    //  soglia sensore umidità terreno
 long timerDisplay = 0;
 long irrigationTime = 1800; /*60;*/ //3600;   // CountDown Irrigazione in secondi
 long timeOutIrrigation = 0;
@@ -36,7 +43,10 @@ bool manualIrrigationState = false;  // Indica se il sistema sta irrigando o men
  * 
  */
 void setup() {
+  Serial.begin(9600);
   Serial.println(F("DHTxx test!"));
+  bluetooth.begin(9600);
+  bluetooth.println("setting up");
   dht.begin();
   pinMode(elettrovalvola,OUTPUT);
   pinMode(lightSensor,INPUT);
@@ -55,7 +65,6 @@ void setup() {
     Serial.println("Couldn't find RTC");
     while (1);
   }
-  pinMode(LED_BUILTIN, OUTPUT);
   if (!rtc.isrunning()) {
     Serial.println("RTC is NOT running!");
     // following line sets the RTC to the date & time this sketch was compiled
@@ -66,8 +75,15 @@ void setup() {
   }
  timerDisplay = rtc.now().unixtime();
  timeOutIrrigation = rtc.now().unixtime();
-  Serial.begin(9600);
+  
 }
+
+
+ 
+
+
+
+
 /**
  * rileva se il pulsangte è premuto
  */
@@ -185,9 +201,9 @@ bool isNight(){
  */
 int soilMoistureControl(){
   int sensorValue = analogRead(pinSensor);
-  Serial.println(sensorValue);
+ // Serial.println(sensorValue);
   int soilMoisture = 1023 - sensorValue;
-   Serial.println(soilMoisture);
+   //Serial.println(soilMoisture);
   soilMoisture = map(soilMoisture,1023,0,99,0);
  // Serial.println(soilMoisture);
   return soilMoisture;
@@ -214,6 +230,42 @@ void valueReader() {
                1023
                };
 }
+
+ void bluetoothListener(DateTime now) {
+     
+    while(bluetooth.available()) {
+       char incomingByte = bluetooth.read();
+       switch(incomingByte) {
+          case 'a':
+          Serial.write(incomingByte);
+          Serial.println("");
+          //bluetooth.write(dataValue.temperature);
+           startIrrigationProcess(now);  
+           break;
+
+          case 'b':
+          Serial.write(incomingByte);
+          Serial.println("");
+          stopIrrigationProcess(now);
+           break;
+
+          case 'i':
+          Serial.write(incomingByte);
+          Serial.println("");
+          
+          bluetooth.write("45");
+           break;
+           
+           
+       }
+ 
+      
+    }
+  }
+
+
+
+
 /*
  * 
  * funzione che produce suono di inizio/fine irrigazione
@@ -333,11 +385,13 @@ void valueReader() {
    * 
    */
 void loop() {
+ 
   DateTime now = rtc.now();
   btnSound(buttonDisplay,1000);
   btnSound(buttonManIrrig,2000);
   valueReader();
   displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,1023,dataValue.timeOfDay,now);
-  //irrigationCycle(now);
+  irrigationCycle(now);
   manualIrrigation(now);
+  bluetoothListener(now);
 }
