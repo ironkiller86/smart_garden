@@ -1,8 +1,12 @@
 
 /*********************************************************/
 // include the library code
+
+
+
 #include <Wire.h>    // library I2C
 #include "DHT.h"    //libreria DHT11
+#include <Adafruit_BMP280.h>
 #include "RTClib.h" //library modulo RTC
 #include <SoftwareSerial.h>     // libreria comunicazione seriale bluetooth
 #include <LiquidCrystal_I2C.h>  //library display 
@@ -14,6 +18,11 @@ LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars
 #define DHTPIN 2                 //define pin DHT
 #define DHTTYPE DHT11 
 
+Adafruit_BMP280 bmp; 
+
+
+
+
 #define RX 11                  // pin rx bluetooth
 #define TX 10                  // pin Tx bluetooth
 SoftwareSerial bluetooth(TX, RX);  //  creazione Object di tipo SoftwareSerial
@@ -21,6 +30,9 @@ SoftwareSerial bluetooth(TX, RX);  //  creazione Object di tipo SoftwareSerial
 
 DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
 RTC_DS1307 rtc;           //crezione oggetto di tipo rtc
+
+
+
 
 /**********************************************************/
 int buttonManIrrig = 35;      // Bottone irrigazione manuale
@@ -45,6 +57,7 @@ bool manualIrrigationState = false;  // Indica se il sistema sta irrigando o men
 void setup() {
   Serial.begin(9600);
   Serial.println(F("DHTxx test!"));
+  Serial.println(F("BMP280 test"));
   bluetooth.begin(9600);
   bluetooth.println("setting up");
   dht.begin();
@@ -75,6 +88,17 @@ void setup() {
   }
  timerDisplay = rtc.now().unixtime();
  timeOutIrrigation = rtc.now().unixtime();
+
+ /* if (!bmp.begin()) {
+    Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+    while (1);
+  }*/
+
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
   
 }
 
@@ -99,7 +123,7 @@ void btnSound(int button,int note){
   * Funzione che visualizza i dati nel display e ne 
   * gestisce l'attivazione/disattivazione in base al tempo
   */
-void displayLayout(float temp, float humidity ,int soilMoisture,long atmPress,bool isNight,DateTime val) {
+void displayLayout(float temp, float humidity ,int soilMoisture,float atmPress,bool isNight,DateTime val) {
   printTemp(temp);
   printHumidity(humidity);
   printSoilMosture(soilMoisture);
@@ -157,11 +181,12 @@ void printSoilMosture(int soilMoisture) {
  * stampa layout pressione atm e tempo di irrigazione se quest'utlima
  * è in corso
  */
-void printAtmPress(long &atmPress,DateTime val) {
+void printAtmPress(float atmPress,DateTime val) {
    lcd.setCursor (0, 3);
    if((!irrigationState) && (!manualIrrigationState)){
      lcd.print("Press Atm: ");
-     lcd.print(atmPress);
+     Serial.println(atmPress /100);
+     lcd.print(atmPress /100);
      lcd.print(" hpa");
    }
   else  if((irrigationState) || (manualIrrigationState)){
@@ -217,7 +242,7 @@ struct DataSensor {
   bool timeOfDay;
   float humidity;
   float temperature;
-  int atmPressure;
+  float atmPressure;
 }dataValue;
 /**
  * Funzione che legge tutti i dati dalle rispettive
@@ -227,7 +252,7 @@ void valueReader() {
   dataValue = {soilMoistureControl(),
                isNight(),dht.readHumidity(), 
                dht.readTemperature(),
-               1023
+               bmp.readPressure()
                };
 }
 
@@ -390,8 +415,10 @@ void loop() {
   btnSound(buttonDisplay,1000);
   btnSound(buttonManIrrig,2000);
   valueReader();
-  displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,1023,dataValue.timeOfDay,now);
+  displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,dataValue.atmPressure,dataValue.timeOfDay,now);
   irrigationCycle(now);
   manualIrrigation(now);
   bluetoothListener(now);
+   
+    Serial.print(bmp.readTemperature());
 }
