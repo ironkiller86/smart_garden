@@ -1,9 +1,5 @@
-
 /*********************************************************/
 // include the library code
-
-
-
 #include <Wire.h>    // library I2C
 #include "DHT.h"    //libreria DHT11
 #include <Adafruit_BMP280.h>
@@ -41,7 +37,7 @@ int lightSensor = A14;
 int lightSensorThreshold = 500;      // Soglia sensore di luminosità
 int moistureSensorThreshold = 75;    //  soglia sensore umidità terreno
 long timerDisplay = 0;
-long irrigationTime = 1800; /*60;*/ //3600;   // CountDown Irrigazione in secondi
+long irrigationTime = 1200; /*60;*///3600;   // CountDown Irrigazione in secondi
 long timeOutIrrigation = 0;
 int buzzer = 23;
 int powerLed = 22;
@@ -101,13 +97,6 @@ void setup() {
                   Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
   
 }
-
-
- 
-
-
-
-
 /**
  * rileva se il pulsangte è premuto
  */
@@ -129,8 +118,7 @@ void displayLayout(float temp, float humidity ,int soilMoisture,float atmPress,b
   printSoilMosture(soilMoisture);
   printAtmPress(atmPress,val); 
   printDay(isNight);
-  //Serial.println(val.unixtime() - timerDisplay);
-  if((val.unixtime() - timerDisplay > timeOutDisplay) && (turnOff) ){
+  if((timerComponent(val.unixtime(),timerDisplay,timeOutDisplay)) && (turnOff) ){
     deactivatesDisplay();
   }
   if(!turnOff && digitalRead(buttonDisplay) == HIGH ){
@@ -185,8 +173,7 @@ void printAtmPress(float atmPress,DateTime val) {
    lcd.setCursor (0, 3);
    if((!irrigationState) && (!manualIrrigationState)){
      lcd.print("Press Atm: ");
-     Serial.println(atmPress /100);
-     lcd.print(atmPress /100);
+     lcd.print(atmPress);
      lcd.print(" hpa");
    }
   else  if((irrigationState) || (manualIrrigationState)){
@@ -219,7 +206,6 @@ bool isNight(){
   else{
     return false;
   }
-
 }
 /**
  *  Funzione lettura umidita terreno dal sensore
@@ -252,12 +238,14 @@ void valueReader() {
   dataValue = {soilMoistureControl(),
                isNight(),dht.readHumidity(), 
                dht.readTemperature(),
-               bmp.readPressure()
                };
 }
-
+/**
+ * 
+ * 
+ * 
+ */ 
  void bluetoothListener(DateTime now) {
-     
     while(bluetooth.available()) {
        char incomingByte = bluetooth.read();
        switch(incomingByte) {
@@ -272,19 +260,14 @@ void valueReader() {
           Serial.write(incomingByte);
           Serial.println("");
           stopIrrigationProcess(now);
-           break;
+          break;
 
           case 'i':
           Serial.write(incomingByte);
           Serial.println("");
-          
           bluetooth.write("45");
-           break;
-           
-           
+          break;
        }
- 
-      
     }
   }
 
@@ -339,8 +322,21 @@ void valueReader() {
       lcd.setCursor(0,2);
       lcd.print(three);
   }
+/**
+ * Timer
+ * 
+ */
+  bool timerComponent(DateTime now, long timeHold ,long duration ) {
+       if(now.unixtime() - timeHold > duration) {
+           return true;
+       }
+       else {
+         return false;
+       }
+       return false;
+  }
   /**
-   * funzione di attivazione irrigazione
+   * funzione di attivazione elettrovalvola per  irrigazione
    */
    void startIrrigationProcess(DateTime now) {
         activeDisplay();
@@ -371,24 +367,8 @@ void valueReader() {
       if((dataValue.soilMoisture <  moistureSensorThreshold) && (dataValue.timeOfDay == true ) && (!manualIrrigationState)) {
         startIrrigationProcess(now);
         irrigationState = true;
-        
       }
-    }
-   // Serial.println(now.unixtime() - timeOutIrrigation);
-   if((irrigationState)){
-     if(now.unixtime() -  timeOutIrrigation > irrigationTime) {
-        stopIrrigationProcess(now);
-        irrigationState = false;
-     } 
-   } 
- }
- /**
-  * funzione che attiva/disattiva l'irrigazione da comando manuale bypassando le condizioni
-  * di attivazione standard
-  */
-   void manualIrrigation(DateTime now) {
-     if(!irrigationState) {
-        if(digitalRead(buttonManIrrig) == HIGH && (!manualIrrigationState)){
+      if(digitalRead(buttonManIrrig) == HIGH && (!manualIrrigationState)){
           manualIrrigationState = true;
           startIrrigationProcess(now);
           turnOff = false;
@@ -398,27 +378,30 @@ void valueReader() {
          * disattivo l'irrigazione immediatamemnte.
          */
         if(manualIrrigationState) {
-          if(now.unixtime() -  timeOutIrrigation > irrigationTime || digitalRead(buttonManIrrig) == HIGH ) {
+          if((timerComponent(now.unixtime(),timeOutIrrigation,irrigationTime)) || digitalRead(buttonManIrrig) == HIGH ) {
             stopIrrigationProcess(now);
             manualIrrigationState = false;
             turnOff = false;
           } 
        }  
-     }
-   }
+    }
+   if((irrigationState)){
+     if(timerComponent(now.unixtime(),timeOutIrrigation,irrigationTime)) {
+        stopIrrigationProcess(now);
+        irrigationState = false;
+     } 
+   } 
+ }
   /**
    * 
    */
 void loop() {
- 
   DateTime now = rtc.now();
   btnSound(buttonDisplay,1000);
   btnSound(buttonManIrrig,2000);
   valueReader();
-  displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,dataValue.atmPressure,dataValue.timeOfDay,now);
+  displayLayout(dataValue.temperature,dataValue.humidity,dataValue.soilMoisture,958,dataValue.timeOfDay,now);
   irrigationCycle(now);
-  manualIrrigation(now);
   bluetoothListener(now);
-   
-    Serial.print(bmp.readTemperature());
 }
+    
