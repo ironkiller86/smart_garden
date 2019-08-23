@@ -35,10 +35,12 @@ int buttonManIrrig = 35;      // Bottone irrigazione manuale
 int buttonDisplay = 37;       // Bottone accensione display
 int lightSensor = A14;
 int lightSensorThreshold = 500;      // Soglia sensore di luminosità
-int moistureSensorThreshold = 90;    //  soglia sensore umidità terreno
+int moistureSensorThreshold = 85;    //  soglia sensore umidità terreno
 long timerDisplay = 0;
 long irrigationTime = 1200; /*60;*///3600;   // CountDown Irrigazione in secondi
 long timeOutIrrigation = 0;
+long timeOutSensorReading = 0;
+int sensorReading = 2;
 int buzzer = 23;
 int powerLed = 22;
 int timeOutDisplay = 20;           // CountDown attivazione dispaly in secondi
@@ -84,6 +86,7 @@ void setup() {
   }
  timerDisplay = rtc.now().unixtime();
  timeOutIrrigation = rtc.now().unixtime();
+ timeOutSensorReading = rtc.now().unixtime();
 
  /* if (!bmp.begin()) {
     Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
@@ -210,9 +213,16 @@ bool isNight(){
 /**
  *  Funzione lettura umidita terreno dal sensore
  */
-int soilMoistureControl(){
+int soilMoistureControl(DateTime now){
+    Serial.println(now.unixtime());
+    //Serial.println(timeOutSensorReading);
+   if((timerComponent(now.unixtime(),timeOutSensorReading ,sensorReading))) {
+        Serial.println("cioa");
+        timeOutSensorReading = now.unixtime(); 
+   }
+   
   int sensorValue = analogRead(pinSensor);
- // Serial.println(sensorValue);
+
   int soilMoisture = 1023 - sensorValue;
    //Serial.println(soilMoisture);
   soilMoisture = map(soilMoisture,1023,0,99,0);
@@ -235,7 +245,8 @@ struct DataSensor {
  * funzioni di lettura e li salva nella struct
  */
 void valueReader() {
-  dataValue = {soilMoistureControl(),
+   DateTime now = rtc.now();
+  dataValue = {soilMoistureControl(now),
                isNight(),dht.readHumidity(), 
                dht.readTemperature(),
                };
@@ -364,7 +375,7 @@ void valueReader() {
     */
  void irrigationCycle(DateTime now) {
    if(!irrigationState) {
-      if((dataValue.soilMoisture <  moistureSensorThreshold) && (dataValue.timeOfDay == true ) && (!manualIrrigationState)) {
+      if((dataValue.soilMoisture <=  moistureSensorThreshold) && (dataValue.timeOfDay == true ) && (!manualIrrigationState)) {
         startIrrigationProcess(now);
         irrigationState = true;
       }
