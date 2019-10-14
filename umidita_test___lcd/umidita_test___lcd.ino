@@ -21,7 +21,7 @@ Adafruit_BMP280 bmp;
 
 #define RX 11                  // pin rx bluetooth
 #define TX 10                  // pin Tx bluetooth
-SoftwareSerial bluetooth(TX, RX);  //  creazione Object di tipo SoftwareSerial
+SoftwareSerial mySerial(TX, RX);  //  creazione Object di tipo SoftwareSerial
 
 
 DHT dht(DHTPIN, DHTTYPE); //crezione oggetto di tipo dht
@@ -56,8 +56,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println(F("DHTxx test!"));
   Serial.println(F("BMP280 test"));
-  bluetooth.begin(9600);
-  bluetooth.println("setting up");
+  initBle();
   dht.begin();
   pinMode(elettrovalvola,OUTPUT);
   pinMode(lightSensor,INPUT);
@@ -101,6 +100,45 @@ void setup() {
   
 }
 /**
+ * 
+ */
+void initBle(){
+  mySerial.begin(9600);
+  mySerial.println("Starting config");
+  delay(1000);
+  mySerial.print("AT");
+  waitForResponse();
+  Serial.println("AT+NAME?");
+  mySerial.print("AT+NAME?");
+  waitForResponse();
+  Serial.println("AT+CHAR?");
+  mySerial.print("AT+CHAR?");
+  waitForResponse();
+  Serial.println("Done!");
+}
+/**
+ * 
+ */
+void waitForResponse() {
+    delay(1000);
+    while (mySerial.available()) {
+      Serial.write(mySerial.read());
+    }
+    Serial.write("\n");
+}
+/**
+ * 
+ */
+ void sendData(float value){
+    char strFloat[20];
+    dtostrf(value, 4, 2, strFloat);
+    Serial.println(strFloat);
+    mySerial.write(strFloat, strlen(strFloat));
+ }
+
+
+
+/**
  * rileva se il pulsangte è premuto
  */
 void btnSound(int button,int note){
@@ -115,7 +153,7 @@ void btnSound(int button,int note){
   * Funzione che visualizza i dati nel display e ne 
   * gestisce l'attivazione/disattivazione in base al tempo
   */
-void displayLayout(float temp, float humidity ,int soilMoisture,float atmPress,bool isNight,DateTime val) {
+void displayLayout(float temp, float humidity ,float soilMoisture,float atmPress,bool isNight,DateTime val) {
   printTemp(temp);
   printHumidity(humidity);
   printSoilMosture(soilMoisture);
@@ -151,7 +189,7 @@ void printHumidity(float hum) {
 /**
  * stampa layout umidita terreno
  */
-void printSoilMosture(int soilMoisture) {
+void printSoilMosture(float soilMoisture) {
    lcd.setCursor (0, 2);
    lcd.print("Umd Terr: ");
    lcd.print(soilMoisture);
@@ -213,7 +251,7 @@ bool isNight(){
 /**
  *  Funzione lettura umidita terreno dal sensore
  */
-int soilMoistureControl(DateTime now){
+float soilMoistureControl(DateTime now){
     Serial.println(now.unixtime());
     //Serial.println(timeOutSensorReading);
    if((timerComponent(now.unixtime(),timeOutSensorReading ,sensorReading))) {
@@ -221,9 +259,9 @@ int soilMoistureControl(DateTime now){
         timeOutSensorReading = now.unixtime(); 
    }
    
-  int sensorValue = analogRead(pinSensor);
+  float sensorValue = analogRead(pinSensor);
 
-  int soilMoisture = 1023 - sensorValue;
+  float soilMoisture = 1023 - sensorValue;
    //Serial.println(soilMoisture);
   soilMoisture = map(soilMoisture,1023,0,99,0);
  // Serial.println(soilMoisture);
@@ -234,7 +272,7 @@ int soilMoistureControl(DateTime now){
  * 
  */
 struct DataSensor {
-  int soilMoisture;
+  float soilMoisture;
   bool timeOfDay;
   float humidity;
   float temperature;
@@ -256,32 +294,41 @@ void valueReader() {
  * 
  * 
  */ 
- void bluetoothListener(DateTime now) {
-    while(bluetooth.available()) {
-       char incomingByte = bluetooth.read();
-       switch(incomingByte) {
+void bluetoothListener(DateTime now) {    
+    while(mySerial.available() > 0) {
+      char comand = mySerial.read();
+       switch(comand) {
+          case 'i':
+          Serial.println("send information");
+           sendData(dataValue.temperature);
+           sendData(dataValue.soilMoisture);
+           sendData(dataValue.humidity);
+           sendData(dataValue.timeOfDay);
+           sendData(1);
+           break;
+
           case 'a':
-          Serial.write(incomingByte);
-          Serial.println("");
-          //bluetooth.write(dataValue.temperature);
+           Serial.println("active irrigation ");
+           sendData(dataValue.temperature);
+           sendData(dataValue.soilMoisture);
+           sendData(dataValue.humidity);
+           sendData(dataValue.timeOfDay);
+           sendData(3);
            startIrrigationProcess(now);  
            break;
 
-          case 'b':
-          Serial.write(incomingByte);
-          Serial.println("");
-          stopIrrigationProcess(now);
-          break;
-
-          case 'i':
-          Serial.write(incomingByte);
-          Serial.println("");
-          bluetooth.write("45");
-          break;
-       }
+          case 's':
+           Serial.println("stop irrigation ");
+           sendData(dataValue.temperature);
+           sendData(dataValue.soilMoisture);
+           sendData(dataValue.humidity);
+           sendData(dataValue.timeOfDay);
+           sendData(2);
+           stopIrrigationProcess(now);
+           break;
+       }   
     }
-  }
-
+}
 
 
 
